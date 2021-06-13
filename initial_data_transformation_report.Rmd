@@ -1,0 +1,204 @@
+---
+title: 'Task 2: Initial Data Transformation'
+author: "James Mbewu"
+date: "13/06/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(jsonlite)
+library(units)
+library(sf)
+library(h3jsr) 
+library(knitr)
+```
+
+## Overview
+
+This is an R Markdown document serves as the report and code for Task 2: Initial
+Data Transformation of the City of Cape Town Data Science Unit Code Challenge. 
+The code by itself can be found in the file initial_data_transformation.R.
+
+## Brief
+
+Join the file `city-hex-polygons-8.geojson` to the service request dataset, such that each service request is assigned to a single H3 hexagon. Use the `sr_hex.csv` file to validate your work.
+
+For any requests where the `Latitude` and `Longitude` fields are empty, set the index value to `0`.
+
+Include logging that lets the executor know how many of the records failed to join, and include a join error threshold above which the script will error out. Please also log the time taken to perform the operations described, and within reason, try to optimise latency and computational resources used.
+
+## Report
+
+The aim of this task is to join the H3 level 8 hex data in `city-hex-polygons-8.geojson`
+to the service request dataset ,`sr.csv`, that has been provided. To do this I
+used the [h3jsr](https://github.com/obrl-soil/h3jsr) library to calculate the H3
+level 8 hex index of the hex that contains the latitude and longitude of each 
+service request. I then used this index to join the two datasets together so that
+the combined dataset contains H3 hex data for the hex it is in.
+
+The join was then validated by comparing H3 hex level 8 index in the constructed 
+joined dataset with a provided dataset (`sr_hex.csv`) that includes service request
+data as well as the corresponding H3 hex level 8 index. Having said that, this
+doesn't really validate the join, but more like the calculation of the H3 level 
+8 index so perhaps the intention was for me to calculate the H3 level 8 index of 
+the service request from `city-hex-polygons-8.geojson` data myself. In any case,
+I think it is better and more efficient to just use the off-the-shelf H3 R-bindings
+provided by h3jsr.
+
+**Note**: When installing the package h3jsr I had an error that could be fixed by
+installing/updating some extra packages in the Unix command line. The command 
+to fix this was:  
+`sudo apt-get -y update && apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev`  
+and then to install the package in R terminal:  
+`remotes::install_github("obrl-soil/h3jsr")`
+
+### Loading Data
+
+We first need to download the datasets from the remote location and save them
+to a temporary staging folder before being read in by R as a data frame. The service 
+request dataset is particularly large so it might be a good idea to load and process 
+it in batches. For now in the testing phase I am simply processing a subset of the
+data.
+
+```{r}
+
+rm(list = ls())
+
+# Note that I was having some troubles getting h3jsr to work out of the box
+# and I needed to do the following (on linux):
+# 1) apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev (in unix terminal)
+# 2) remotes::install_github("obrl-soil/h3jsr" (in R)
+
+
+start <- Sys.time()
+
+# Download data if not present
+# TODO: using local data for now
+
+end_download <- Sys.time()
+download_time <- difftime(end_download, start)
+print(paste("download_time =",download_time))
+
+
+start_load <- Sys.time()
+
+# Read in data
+# For testing purposes we are only going to read in a subset of the data
+hex_8_data <- read_json("data/city-hex-polygons-8.geojson",simplifyVector = TRUE)
+sr_data <- read_csv("data/sr.csv",n_max = 1000,skip = 0, col_types = cols());
+
+end_load <- Sys.time()
+load_time <- difftime(end_load, start_load)
+print(paste("load_data_time =",load_time))
+
+```
+
+### Joining the data
+
+To join the data, it is simply a case of calculating the H3 hex level 8 index of
+the service request from its latitude and longitude using the package h3jsr. Then
+we use these indexes to join the service request data and the H3 hex level 8 data.
+
+```{r}
+
+start_calc_h3 <- Sys.time()
+
+
+# Add the h3_level_8_index to sr_data using h3jsr
+sr_data$h3_level8_index <- '0'
+for(sr_row in seq_along(1:nrow(sr_data))){
+  lat <- pull(sr_data[sr_row,"Latitude"])
+  lon <- pull(sr_data[sr_row,"Longitude"])
+  
+  if(!is.na(lat) && !is.na(lon)) {
+    # find the h3 index of this
+    sfc_point <- st_sfc(st_point(c(lon, lat)), crs = 4326)
+    sr_data[sr_row,"h3_level8_index"] <- point_to_h3(sfc_point, res = 8)
+  }
+}
+
+end_calc_h3 <- Sys.time()
+calc_h3_time <- difftime(end_calc_h3, start_calc_h3)
+print(paste("calc_h3_time =",calc_h3_time))
+
+
+# Join the tables by h3_level_8_index
+start_join_data <- Sys.time()
+
+hex_8_data$features$h3_level8_index <- hex_8_data$features$properties$index
+sr_data_combined <- sr_data %>% left_join(hex_8_data$features,by="h3_level8_index")
+
+end_join_data <- Sys.time()
+join_data_time <- difftime(end_join_data, start_join_data)
+print(paste("join_data_time =",join_data_time))
+
+```
+
+### Validation
+
+To validate the data we simply have to download a provided dataset that includes
+service request data matched with H3 level 8 indexes and compare it with the joined
+dataset that we created above. If all the indexes match then we have successfully
+joined the datasets.
+
+```{r}
+
+# VALIDATION ==================================================================
+
+start_validation <- Sys.time()
+# Download validation data if not present
+# TODO
+
+# Load validation dataset
+# For testing purposes we are only going to read in a subset of the data
+sr_hex_data <- read_csv("data/sr_hex.csv",n_max = 1000,skip = 0, col_types = cols());
+
+# Compare indexes to make sure they are the same (assume in same order for now)
+h3_indexes_true <- sr_hex_data$h3_level8_index
+h3_indexes_computed <- sr_data_combined$h3_level8_index
+
+validation_result <- all(h3_indexes_true == h3_indexes_computed)
+if(validation_result) {
+  print("Validation passed! :)")
+} else
+{
+  print("Validation failed! :(")
+}
+
+
+end_validation <- Sys.time()
+validation_time <- difftime(end_validation, start_validation)
+print(paste("validation_time =",validation_time))
+
+
+total_time <- difftime(end_validation, start)
+print(paste("total_time =",total_time))
+
+```
+
+### Performance
+
+The time taken to perform these operations was logged to the command line and 
+is presented in the table below.
+
+```{r, results = 'asis'}
+
+# Table showing the logged times for each subsection and the total
+options(digits=3)
+log_times <- c(download_time,load_time,calc_h3_time,
+               join_data_time,validation_time,total_time)
+log_times_df <- data.frame(Times = log_times)
+colnames(log_times_df) <- c("Times")
+rownames(log_times_df) <- c("Download","Load","Calc H3 Index",
+                            "Join Data","Validation","Total")
+kable(log_times_df, caption = "Log times for Initial Data Transformation Task")
+
+```
+
+### Conclusions
+
+We have now successfully joined the service request dataset and the H3 level 8 
+dataset. The joined dataset was validated using a provided dataset and comparing
+H3 level 8 indexes.
