@@ -16,17 +16,17 @@ library(knitr)
 
 ## Overview
 
-This is an R Markdown document serves as the report and code for Task 1: Data Extraction
-of the City of Cape Town Data Science Unit Code Challenge. The code by itself
+This R Markdown document serves as the report and code for Task 1: Data Extraction
+for the City of Cape Town Data Science Unit Code Challenge. The code by itself
 can be found in the file data_extraction.R.
 
-### Brief
+## Brief
 
 Use the [AWS S3 SELECT](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-glacier-select-sql-reference-select.html) command to read in the H3 resolution 8 data from `city-hex-polygons-8-10.geojson`. Use the `city-hex-polygons-8.geojson` file to validate your work.
 
 Please log the time taken to perform the operations described, and within reason, try to optimise latency and computational resources used.
 
-### Report
+## Report
 
 The crux of this task is to use AWS S3 SELECT to query and read in the H3 resolution data
 of level 8 from a larger dataset in a bucket on AWS S3 that contains H3 resolution data of levels
@@ -36,7 +36,7 @@ The query was performed and the dataset extracted was validated by comparing H3
 resolution indexes with an existing dataset that contained only H3 resolution data of 
 level 8. The time to complete the task and subtasks was logged.
 
-#### AWS credentials
+### AWS credentials
 
 We first load the AWS S3 credentials from the link provided and set the appropriate
 environmental variables that paws will use to access files in the AWS S3 bucket.
@@ -62,7 +62,7 @@ Sys.setenv(
 s3 <- paws::s3()
 ```
 
-#### Extracting the data
+### Extracting the data
 
 It is much more efficient to extract only the data we require than downloading
 all the data and filtering it locally. To extract the level 8 data we need to query 
@@ -113,7 +113,7 @@ print(paste("extraction_time =",extraction_time))
 
 ```
 
-#### Validation
+### Validation
 
 To validate that we extracted all the correct features, we compare the H3 level 8 
 indexes of the extracted data with a dataset that only includes the H3 level 8
@@ -156,20 +156,23 @@ print(paste("total_time =",total_time))
 
 ```
 
-#### Conclusions
+### Performance
 
-We have successfully queried the H3 resolution data and extracted only the H3 
-level 8 data from the AWS S3 bucket. The extracted data was validated with an
-existing file to test if the extraction was successful. The time taken to perform
-these operations was logged to the command line and is presented in the table below.
+The time taken to perform these operations was logged to the command line and 
+is presented in the table below.
 
 ```{r, results = 'asis'}
 
 # Table showing the logged times for each subsection and the total
-options(digits=3)
 log_times <- c(extraction_time,validation_time,total_time)
 log_times_df <- data.frame(Times = log_times)
 rownames(log_times_df) <- c("Extraction","Validation","Total")
 kable(log_times_df, caption = "Log times for Data Extraction Task")
 
 ```
+
+### Conclusions
+
+We have successfully queried the H3 resolution data and extracted only the H3 
+level 8 data from the AWS S3 bucket. The extracted data was validated with an
+existing file to test if the extraction was successful.

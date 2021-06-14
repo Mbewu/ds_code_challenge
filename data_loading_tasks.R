@@ -9,25 +9,18 @@ this.dir <- dirname(parent.frame(2)$ofile)
 setwd(this.dir)
 
 start <- Sys.time()
-# 
-# # Setup AWS S3 access
-# aws_credentials_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/ds_code_challenge_creds.json"
-# secrets <- fromJSON(aws_credentials_url)
-# 
-# Sys.setenv(
-#   "AWS_ACCESS_KEY_ID" = secrets$s3$access_key,
-#   "AWS_SECRET_ACCESS_KEY" = secrets$s3$secret_key,
-#   "AWS_DEFAULT_REGION" = "af-south-1"
-# )
 
-# Setup AWS S3 access for test
-test_secrets_writeonly <- read_csv('data/writeonlyawscredentials.csv')
+
+# Setup AWS S3 access
+aws_credentials_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/ds_code_challenge_creds.json"
+secrets <- fromJSON(aws_credentials_url)
 
 Sys.setenv(
-  "AWS_ACCESS_KEY_ID" = test_secrets_writeonly$access_key,
-  "AWS_SECRET_ACCESS_KEY" = test_secrets_writeonly$secret_key,
-  "AWS_DEFAULT_REGION" = "us-east-2",
-  "AWS_S3_ENDPOINT" = ""
+  "AWS_ACCESS_KEY_ID" = secrets$s3$access_key,
+  "AWS_SECRET_ACCESS_KEY" = secrets$s3$secret_key,
+  "AWS_DEFAULT_REGION" = "af-south-1",
+  "AWS_S3_ENDPOINT" = "",
+  "AWS_REGION" = "af-south-1"
 )
 
 
@@ -37,7 +30,15 @@ Sys.setenv(
 start <- Sys.time()
 
 # Download data if not present
-# TODO: using local data for now
+dir.create("data",showWarnings = FALSE)
+
+sr_hex_data_filename <- "data/sr_hex.csv"
+sr_hex_gz_data_filename <- "data/sr_hex.csv.gz"
+if(!file.exists(sr_hex_data_filename)) {
+  sr_hex_data_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr_hex.csv.gz"
+  download.file(sr_hex_data_url, sr_hex_gz_data_filename)
+  gunzip(sr_hex_gz_data_filename, remove=FALSE)
+}
 
 end_download <- Sys.time()
 download_time <- difftime(end_download, start)
@@ -47,7 +48,7 @@ start_load <- Sys.time()
 
 # Read in data
 # For testing purposes we are only going to read in a subset of the data
-sr_hex_data <- read_csv("data/sr_hex.csv",n_max = 1000,skip = 0, col_types = cols())
+sr_hex_data <- read_csv(sr_hex_data_filename,n_max = Inf,skip = 0, col_types = cols())
 
 end_load <- Sys.time()
 load_time <- difftime(end_load, start_load)
@@ -57,7 +58,8 @@ print(paste("load_data_time =",load_time))
 start_save_subset <- Sys.time()
 
 # Choose a subset of the columns
-cols <- c("NotificationNumber","h3_level8_index","Latitude","Longitude")
+cols <- c("NotificationNumber","h3_level8_index","Latitude","Longitude",
+          "CompletionDate","CompletionDate","ModificationTimestamp")
 #cols <- c("NotificationNumber")
 sr_hex_data <- sr_hex_data[ , cols]
 
@@ -79,18 +81,11 @@ start_upload <- Sys.time()
 # Setup connection to AWS S3
 s3 <- paws::s3()
 
-# Upload file
 result <- s3$put_object(
   Body = sr_sub_filename,
-  Bucket = "testbucketmbewu",
+  Bucket = "cct-ds-code-challenge-input-data",
   Key = "sr_hex_sub_james_mbewu.csv"
 )
-
-# result <- s3$put_object(
-#   Body = sr_sub_filename,
-#   Bucket = "cct-ds-code-challenge-input-data",
-#   Key = "sr_hex_sub_james_mbewu.csv"
-# )
 
 end_upload <- Sys.time()
 upload_time <- difftime(end_upload, start_upload)

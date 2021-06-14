@@ -7,7 +7,7 @@
 
 This repository contains all the scripts and instructions to run the scripts that constitute my (James Mbewu) submission to the Data Engineer portion of the [City of Cape Town - Data Science Unit Code Challenge](https://github.com/cityofcapetown/ds_code_challenge). This is required as a skills assessment used for shortlisting for positions in the City of Cape Town's Data Science Unit.
 
-Code has primarily been written in R and reports will be in R Markdown.
+Code has primarily been written in R and reports will be in R Markdown. The code was developed in Unix Ubuntu 20.04.2 LTS and RStudio Version 1.4.1106.
 
 The Code Challenge for Data Engineers consists of 4 tasks, which have been attempted and reported on here:
 
@@ -18,48 +18,23 @@ The Code Challenge for Data Engineers consists of 4 tasks, which have been attem
 
 The full description of the tasks is available in CHALLENGESPECS.md. Numbers above skipped were tasks not attempted as they were intended for applicants to other positions (Data Scientist and Data Analyst).
 
-## Getting Started
-
-TODO (all tasks): 
-* A description of how to run the report for each task. It should be pretty standardised but just to make sure.
-* A short report or R Markdown for each task.
-* Ensure all code is runnable from scratch.
+## Tasks
 
 ### Data Extraction
 
-First attempt at Task 1 is now complete and can be found at data_extraction.R.
-
-TODO:
-* Improve speed and benchmark.
-* Better logging.
-* Neaten code.
-* Don't include credentials in file.
-* Don't rely on same order for validation.
+An R Markdown report that includes the code can be found at data_extraction_report.Rmd. The code can be run from the R Markdown file or can be run from the file data_extraction.R that has been included separately for convenience. 
 
 ### Initial Data Transformation
 
-First attempt at Task 2 is now complete and can be found at initial_data_transformation.R.
-
-TODO:
-* Improve speed and benchmark.
-* Better logging.
-* Neaten code.
-* Don't rely on same order for validation.
-* Not sure if using a package to calculate h3 index is cheating (against the spirit of the task) so might implement my own.
+An R Markdown report that includes the code can be found at initial_data_transformation_report.Rmd. **The code in this R Markdown file is not meant to be run (the parallelisation doesn't seem to work in it).** The code that should be run has also been included separately as initial_data_transformation.R. 
 
 ### Further Data Transformations
 
-First attempt at Task 3 is now complete and can be found at further_data_transformations.R.
-
-TODO:
-* Improve speed and benchmark.
-* Better logging.
-* Neaten code.
+An R Markdown report that includes the code can be found at further_data_transformations_report.Rmd. The code can be run from the R Markdown file or can be run from the file further_data_transformations.R that has been included separately for convenience. 
 
 ### Data Loading Tasks
 
-TODO:
-* Everything.
+An R Markdown report that includes the code can be found at data_loading_tasks_report.Rmd. The code can be run from the R Markdown file or can be run from the file data_loading_tasks.R that has been included separately for convenience.
 
 ## Contact
 

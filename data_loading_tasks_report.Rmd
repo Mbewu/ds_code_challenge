@@ -43,26 +43,19 @@ We first load the credentials we will use later for the upload.
 
 rm(list = ls())
 
-# 
-# # Setup AWS S3 access
-# aws_credentials_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/ds_code_challenge_creds.json"
-# secrets <- fromJSON(aws_credentials_url)
-# 
-# Sys.setenv(
-#   "AWS_ACCESS_KEY_ID" = secrets$s3$access_key,
-#   "AWS_SECRET_ACCESS_KEY" = secrets$s3$secret_key,
-#   "AWS_DEFAULT_REGION" = "af-south-1"
-# )
 
-# Setup AWS S3 access for test
-test_secrets_writeonly <- read_csv('data/writeonlyawscredentials.csv')
+# Setup AWS S3 access
+aws_credentials_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/ds_code_challenge_creds.json"
+secrets <- fromJSON(aws_credentials_url)
 
 Sys.setenv(
-  "AWS_ACCESS_KEY_ID" = test_secrets_writeonly$access_key,
-  "AWS_SECRET_ACCESS_KEY" = test_secrets_writeonly$secret_key,
-  "AWS_DEFAULT_REGION" = "us-east-2",
-  "AWS_S3_ENDPOINT" = ""
+  "AWS_ACCESS_KEY_ID" = secrets$s3$access_key,
+  "AWS_SECRET_ACCESS_KEY" = secrets$s3$secret_key,
+  "AWS_DEFAULT_REGION" = "af-south-1",
+  "AWS_S3_ENDPOINT" = "",
+  "AWS_REGION" = "af-south-1"
 )
+
 
 ```
 
@@ -202,7 +195,6 @@ is presented in the table below.
 ```{r, results = 'asis'}
 
 # Table showing the logged times for each subsection and the total
-options(digits=3)
 log_times <- c(download_time,load_time,save_subset_time,
                upload_time,verification_time,total_time)
 log_times_df <- data.frame(Times = log_times)
@@ -216,6 +208,10 @@ kable(log_times_df, caption = "Log times for Data Loading Tasks Task")
 
 ### Conclusions
 
-We have successfully uploaded a file containing a subset of columns from 
-`sr_hex.csv` to the S3 bucket. We have also verified that the file that is now
-in the bucket is indeed the same file that we sent and our upload was successful.
+Unfortunately, when I ran this on Monday morning I got a `Error: AccessDenied (HTTP 403). 
+Access Denied` error. I'm not too sure what the issue was because I was able to 
+successfully query data in the bucket. So it isn't a problem of connecting to it.
+In addition I was able to upload data when testing it with my own bucket. 
+
+In any case, when testing on my own bucket the I could verify that the file
+in the bucket is indeed the same file that we sent and the upload was successful.

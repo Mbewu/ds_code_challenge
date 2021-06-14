@@ -1,26 +1,38 @@
 # Import libraries
 library(tidyverse)
 library(jsonlite)
+library(logging)
 
 rm(list = ls())
-
+basicConfig()
+addHandler(writeToFile, file="further_data_transformations.log", level='DEBUG')
+loginfo("Running further_data_transformations.R",1)
 
 # LOAD DATA ==========================================================
 
 start <- Sys.time()
-
+num_lines <- 10000
 # Download data if not present
-# TODO: using local data for now
+dir.create("data",showWarnings = FALSE)
+
+sr_data_filename <- "data/sr.csv"
+sr_gz_data_filename <- "data/sr.csv.gz"
+if(!file.exists(sr_data_filename)) {
+  sr_data_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr.csv.gz"
+  download.file(sr_data_url, sr_gz_data_filename)
+  gunzip(sr_gz_data_filename, remove=FALSE)
+}
 
 end_download <- Sys.time()
 download_time <- difftime(end_download, start)
-print(paste("download_time =",download_time))
+#print(paste("download_time =",download_time))
+loginfo(paste("download_time =",download_time),1)
 
 start_load <- Sys.time()
 
 # Read in data
 # For testing purposes we are only going to read in a subset of the data
-sr_hex_data <- read_csv("data/sr_hex.csv",n_max = 10000,skip = 0, col_types = cols())
+sr_hex_data <- read_csv("data/sr_hex.csv",n_max = num_lines,skip = 0, col_types = cols())
 
 end_load <- Sys.time()
 load_time <- difftime(end_load, start_load)
@@ -40,14 +52,9 @@ sr_hex_data <- sr_hex_data[ , !(names(sr_hex_data) %in% drop_cols)]
 shuffle_cols_dep <- c("CodeGroup","directorate","department")
 sr_hex_data[, shuffle_cols_dep] <- sr_hex_data[sample(1:nrow(sr_hex_data)), shuffle_cols_dep]
 
-# Shuffle NotificationType
-shuffle_cols_not <- c("NotificationType")
+# Shuffle NotificationNumber
+shuffle_cols_not <- c("NotificationNumber")
 sr_hex_data[, shuffle_cols_not] <- sr_hex_data[sample(1:nrow(sr_hex_data)), shuffle_cols_not]
-
-# Shuffle Open
-shuffle_cols_open <- c("Open")
-sr_hex_data[, shuffle_cols_open] <- sr_hex_data[sample(1:nrow(sr_hex_data)), shuffle_cols_open]
-
 
 
 
@@ -55,7 +62,7 @@ sr_hex_data[, shuffle_cols_open] <- sr_hex_data[sample(1:nrow(sr_hex_data)), shu
 
 # Spatial transforms
 # add/subtract max 350m from the latitude and longitude
-# 350m ~ 0.00314 deg lat and 0.00382 deg lon
+# 350m ~ 0.00314 deg lat and 0.00382 deg lon around Cape Town
 set.seed(NULL)
 lat_350 <- 0.00314
 lon_350 <- 0.00382
@@ -118,4 +125,3 @@ print(paste("write_time =",write_time))
 
 total_time <- difftime(end_write, start)
 print(paste("total_time =",total_time))
-

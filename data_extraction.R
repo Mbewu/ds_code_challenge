@@ -14,7 +14,8 @@ secrets <- fromJSON(aws_credentials_url)
 Sys.setenv(
   "AWS_ACCESS_KEY_ID" = secrets$s3$access_key,
   "AWS_SECRET_ACCESS_KEY" = secrets$s3$secret_key,
-  "AWS_DEFAULT_REGION" = "af-south-1"
+  "AWS_DEFAULT_REGION" = "af-south-1",
+  "AWS_REGION" = "af-south-1"
 )
 
 # Setup connection to AWS S3
@@ -58,6 +59,13 @@ extracted_h3_res8_df <- extracted_h3_res8 %>%
 end_extraction <- Sys.time()
 extraction_time <- difftime(end_extraction, start)
 print(paste("extraction_time =",extraction_time))
+
+
+result <- s3$put_object(
+  Body = "data/sr_hex_anon.csv",
+  Bucket = "cct-ds-code-challenge-input-data",
+  Key = "sr_hex_sub_james_mbewu.csv"
+)
 
 
 # VALIDATION =================

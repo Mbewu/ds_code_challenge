@@ -109,13 +109,21 @@ an R data frame.
 ```{r}
 rm(list = ls())
 
-
+num_lines <- 10000
 # LOAD DATA ==========================================================
 
 start <- Sys.time()
 
 # Download data if not present
-# TODO: using local data for now
+dir.create("data",showWarnings = FALSE)
+
+sr_data_filename <- "data/sr.csv"
+sr_gz_data_filename <- "data/sr.csv.gz"
+if(!file.exists(sr_data_filename)) {
+  sr_data_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr.csv.gz"
+  download.file(sr_data_url, sr_gz_data_filename)
+  gunzip(sr_gz_data_filename, remove=FALSE)
+}
 
 end_download <- Sys.time()
 download_time <- difftime(end_download, start)
@@ -125,11 +133,12 @@ start_load <- Sys.time()
 
 # Read in data
 # For testing purposes we are only going to read in a subset of the data
-sr_hex_data <- read_csv("data/sr_hex.csv",n_max = 10000,skip = 0, col_types = cols())
+sr_hex_data <- read_csv("data/sr_hex.csv",n_max = num_lines,skip = 0, col_types = cols())
 
 end_load <- Sys.time()
 load_time <- difftime(end_load, start_load)
 print(paste("load_data_time =",load_time))
+
 
 ```
 
@@ -260,7 +269,6 @@ is presented in the table below.
 ```{r, results = 'asis'}
 
 # Table showing the logged times for each subsection and the total
-options(digits=3)
 log_times <- c(download_time,load_time,anonymisation_time,
                write_time,total_time)
 log_times_df <- data.frame(Times = log_times)

@@ -173,7 +173,7 @@ pre code {
 
 <div id="overview" class="section level2">
 <h2>Overview</h2>
-<p>This is an R Markdown document serves as the report and code for Task 2: Initial Data Transformation of the City of Cape Town Data Science Unit Code Challenge. The code by itself can be found in the file initial_data_transformation.R.</p>
+<p>This R Markdown document serves as the report and code for Task 2: Initial Data Transformation for the City of Cape Town Data Science Unit Code Challenge. The code by itself can be found in the file initial_data_transformation.R.</p>
 </div>
 <div id="brief" class="section level2">
 <h2>Brief</h2>
@@ -184,15 +184,32 @@ pre code {
 <div id="report" class="section level2">
 <h2>Report</h2>
 <p>The aim of this task is to join the H3 level 8 hex data in <code>city-hex-polygons-8.geojson</code> to the service request dataset ,<code>sr.csv</code>, that has been provided. To do this I used the <a href="https://github.com/obrl-soil/h3jsr">h3jsr</a> library to calculate the H3 level 8 hex index of the hex that contains the latitude and longitude of each service request. I then used this index to join the two datasets together so that the combined dataset contains H3 hex data for the hex it is in.</p>
+<p>The calculation of H3 indexes was sped up by splitting the data into batches and then processing each of these batches in parallel using the package future. The data was split into batches so that the program could abort if not enough of the H3 indexes could be calculated and to provide progress updates to the user.</p>
 <p>The join was then validated by comparing H3 hex level 8 index in the constructed joined dataset with a provided dataset (<code>sr_hex.csv</code>) that includes service request data as well as the corresponding H3 hex level 8 index. Having said that, this doesn’t really validate the join, but more like the calculation of the H3 level 8 index so perhaps the intention was for me to calculate the H3 level 8 index of the service request from <code>city-hex-polygons-8.geojson</code> data myself. In any case, I think it is better and more efficient to just use the off-the-shelf H3 R-bindings provided by h3jsr.</p>
+<p><strong>Note</strong>: Unfortunately I only had access to my 2 core laptop to run this dataset on so I wasn’t able to process the whole dataset or investigate the scaling of the parallelisation. But from my minimal tests it did seem to make a good improvement, for example running 10 000 service requests took 46s with 1 process and 27s with 2 processes to calculate the H3 indexes.</p>
 <p><strong>Note</strong>: When installing the package h3jsr I had an error that could be fixed by installing/updating some extra packages in the Unix command line. The command to fix this was:<br />
 <code>sudo apt-get -y update &amp;&amp; apt-get install -y libudunits2-dev libgdal-dev libgeos-dev libproj-dev</code><br />
 and then to install the package in R terminal:<br />
 <code>remotes::install_github(&quot;obrl-soil/h3jsr&quot;)</code></p>
+<div id="parmeters" class="section level3">
+<h3>Parmeters</h3>
+<p>There are a number of parameters that can be set below for this script including the number of processors to use (num_procs), the number of lines to read and process (num_lines), the number of batches to split the data into (num_batches_input), the threshold at which the program closes if not enough H3 indexes could be calculated (join_error_threshold).</p>
+<pre class="r"><code>rm(list = ls())
+# PARAMETERS ===================================================================
+# Number of processors to use
+num_procs &lt;- 2
+# Number of lines to read (service requests to process)
+num_lines &lt;- 2000
+# Number of batches to split data into (minimum set to 10)
+num_batches_input &lt;- 10
+# Error threshold to terminate program if not enough h3 indexes can be calculated
+join_error_threshold &lt;- 0.2</code></pre>
+</div>
 <div id="loading-data" class="section level3">
 <h3>Loading Data</h3>
 <p>We first need to download the datasets from the remote location and save them to a temporary staging folder before being read in by R as a data frame. The service request dataset is particularly large so it might be a good idea to load and process it in batches. For now in the testing phase I am simply processing a subset of the data.</p>
-<pre class="r"><code>rm(list = ls())
+<pre class="r"><code># LOAD DATA ===================================================================
+
 
 # Note that I was having some troubles getting h3jsr to work out of the box
 # and I needed to do the following (on linux):
@@ -203,57 +220,274 @@ and then to install the package in R terminal:<br />
 start &lt;- Sys.time()
 
 # Download data if not present
-# TODO: using local data for now
+dir.create(&quot;data&quot;,showWarnings = FALSE)
+
+hex_8_data_filename &lt;- &quot;data/city-hex-polygons-8.geojson&quot;
+if(!file.exists(hex_8_data_filename)) {
+  hex_8_data_url &lt;- &quot;https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/city-hex-polygons-8.geojson&quot;
+  download.file(hex_8_data_url, hex_8_data_filename)
+}
+
+sr_data_filename &lt;- &quot;data/sr.csv&quot;
+sr_gz_data_filename &lt;- &quot;data/sr.csv.gz&quot;
+if(!file.exists(sr_data_filename)) {
+  sr_data_url &lt;- &quot;https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr.csv.gz&quot;
+  download.file(sr_data_url, sr_gz_data_filename)
+  gunzip(sr_gz_data_filename, remove=FALSE)
+}
 
 end_download &lt;- Sys.time()
 download_time &lt;- difftime(end_download, start)
 print(paste(&quot;download_time =&quot;,download_time))</code></pre>
-<pre><code>## [1] &quot;download_time = 0.00220847129821777&quot;</code></pre>
+<pre><code>## [1] &quot;download_time = 0.0065455436706543&quot;</code></pre>
 <pre class="r"><code>start_load &lt;- Sys.time()
 
 # Read in data
 # For testing purposes we are only going to read in a subset of the data
-hex_8_data &lt;- read_json(&quot;data/city-hex-polygons-8.geojson&quot;,simplifyVector = TRUE)
-sr_data &lt;- read_csv(&quot;data/sr.csv&quot;,n_max = 1000,skip = 0, col_types = cols());</code></pre>
+hex_8_data &lt;- read_json(hex_8_data_filename,simplifyVector = TRUE)
+sr_data &lt;- read_csv(sr_data_filename,n_max = num_lines,skip = 0, col_types = cols());</code></pre>
 <pre><code>## Warning: Missing column names filled in: &#39;X1&#39; [1]</code></pre>
 <pre class="r"><code>end_load &lt;- Sys.time()
 load_time &lt;- difftime(end_load, start_load)
 print(paste(&quot;load_data_time =&quot;,load_time))</code></pre>
-<pre><code>## [1] &quot;load_data_time = 0.994574069976807&quot;</code></pre>
+<pre><code>## [1] &quot;load_data_time = 0.757933616638184&quot;</code></pre>
 </div>
 <div id="joining-the-data" class="section level3">
 <h3>Joining the data</h3>
 <p>To join the data, it is simply a case of calculating the H3 hex level 8 index of the service request from its latitude and longitude using the package h3jsr. Then we use these indexes to join the service request data and the H3 hex level 8 data.</p>
-<pre class="r"><code>start_calc_h3 &lt;- Sys.time()
+<pre class="r"><code># JOIN DATA ====================================================================
 
+start_calc_h3 &lt;- Sys.time()
 
-# Add the h3_level_8_index to sr_data using h3jsr
-sr_data$h3_level8_index &lt;- &#39;0&#39;
-for(sr_row in seq_along(1:nrow(sr_data))){
-  lat &lt;- pull(sr_data[sr_row,&quot;Latitude&quot;])
-  lon &lt;- pull(sr_data[sr_row,&quot;Longitude&quot;])
+# Specify num_procs to future
+plan(multiprocess, workers = num_procs)</code></pre>
+<pre><code>## Warning in supportsMulticoreAndRStudio(...): [ONE-TIME WARNING] Forked
+## processing (&#39;multicore&#39;) is not supported when running R from RStudio
+## because it is considered unstable. For more details, how to control forked
+## processing or not, and how to silence this warning in future R sessions, see ?
+## parallelly::supportsMulticore</code></pre>
+<pre class="r"><code># Initialise some variables for batch loop
+sr_data$h3_level8_index &lt;- 0
+lat_idx &lt;- which(colnames(sr_data)==&quot;Latitude&quot;)
+lon_idx &lt;- which(colnames(sr_data)==&quot;Longitude&quot;)
+options(digits=9)
+
+num_fail &lt;- 0
+num_attempts &lt;- 0
+portion_complete &lt;- 0
+
+min_batches &lt;- 10
+num_batches &lt;- max(num_batches_input,min_batches)
+batch_size &lt;- as.integer(num_lines/num_batches)
+
+start_idxs &lt;- seq(1,num_lines,batch_size)
+end_idxs &lt;- start_idxs + batch_size
+end_idxs[length(end_idxs)] &lt;- num_lines
+
+# Loop over batches
+for(i in 1:length(start_idxs))  {
+  start_idx = start_idxs[i]
+  end_idx = end_idxs[i]
   
-  if(!is.na(lat) &amp;&amp; !is.na(lon)) {
-    # find the h3 index of this
-    sfc_point &lt;- st_sfc(st_point(c(lon, lat)), crs = 4326)
-    sr_data[sr_row,&quot;h3_level8_index&quot;] &lt;- point_to_h3(sfc_point, res = 8)
-  }
-}
+  # Parallel loop over each batch
+  sr_data$h3_level8_index[start_idx:end_idx] &lt;-
+    future_apply(sr_data[start_idx:end_idx,],1, function(sr_row) {
+      
+    lat &lt;- as.numeric(sr_row[lat_idx])
+    lon &lt;- as.numeric(sr_row[lon_idx])
+    
+    # h3 index is 0 if 
+    h3_level8_index &lt;- 0
+    if(!is.na(lat) &amp;&amp; !is.na(lon)) {
+      # find the h3 index of this
+      sfc_point &lt;- st_sfc(st_point(c(lon, lat)), crs = 4326)
+      h3_level8_index &lt;- point_to_h3(sfc_point, res = 8)
+    }
+  
+    return(h3_level8_index)
+  })
 
-end_calc_h3 &lt;- Sys.time()
+  
+  # Exit if error threshold is reached
+  num_attempts &lt;- end_idx
+  num_fail &lt;- num_fail +
+    sum(!is.na(as.numeric(sr_data$h3_level8_index[start_idx:end_idx])))
+  
+  if(num_fail/num_attempts &gt; join_error_threshold) {
+    percent_fail &lt;- as.integer(num_fail/num_attempts * 100)
+    stop(paste0(&quot;Too many service requests (&quot;,percent_fail,
+    &quot;%) have invalid location data. Exiting.&quot;))
+  }
+
+  # Progress indicator
+  if(i %% as.integer(length(start_idxs)/10) == 0) {
+    portion_complete &lt;&lt;- portion_complete + 1
+    print(paste0(10*portion_complete,&quot;% complete...&quot;))
+  }
+  
+
+}</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;10% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;20% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;30% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;40% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;50% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;60% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;70% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;80% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;90% complete...&quot;</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-1&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: UNRELIABLE VALUE: Future (&#39;future_apply-2&#39;) unexpectedly generated
+## random numbers without specifying argument &#39;future.seed&#39;. There is a risk that
+## those random numbers are not statistically sound and the overall results might
+## be invalid. To fix this, specify &#39;future.seed=TRUE&#39;. This ensures that proper,
+## parallel-safe random numbers are produced via the L&#39;Ecuyer-CMRG method. To
+## disable this check, use &#39;future.seed=NULL&#39;, or set option &#39;future.rng.onMisuse&#39;
+## to &quot;ignore&quot;.</code></pre>
+<pre><code>## Warning: NAs introduced by coercion</code></pre>
+<pre><code>## [1] &quot;100% complete...&quot;</code></pre>
+<pre class="r"><code>print(paste0(num_fail,&quot; out of &quot;,nrow(sr_data),&quot; records failed to join.&quot;))</code></pre>
+<pre><code>## [1] &quot;276 out of 2000 records failed to join.&quot;</code></pre>
+<pre class="r"><code>end_calc_h3 &lt;- Sys.time()
 calc_h3_time &lt;- difftime(end_calc_h3, start_calc_h3)
 print(paste(&quot;calc_h3_time =&quot;,calc_h3_time))</code></pre>
-<pre><code>## [1] &quot;calc_h3_time = 5.46458554267883&quot;</code></pre>
-<pre class="r"><code># Join the tables by h3_level_8_index
-start_join_data &lt;- Sys.time()
-
+<pre><code>## [1] &quot;calc_h3_time = 9.74909472465515&quot;</code></pre>
+<pre class="r"><code>start_join_data &lt;- Sys.time()
+# Join the tables by h3_level_8_index
 hex_8_data$features$h3_level8_index &lt;- hex_8_data$features$properties$index
 sr_data_combined &lt;- sr_data %&gt;% left_join(hex_8_data$features,by=&quot;h3_level8_index&quot;)
 
 end_join_data &lt;- Sys.time()
 join_data_time &lt;- difftime(end_join_data, start_join_data)
 print(paste(&quot;join_data_time =&quot;,join_data_time))</code></pre>
-<pre><code>## [1] &quot;join_data_time = 0.0109059810638428&quot;</code></pre>
+<pre><code>## [1] &quot;join_data_time = 0.0125496387481689&quot;</code></pre>
 </div>
 <div id="validation" class="section level3">
 <h3>Validation</h3>
@@ -266,7 +500,7 @@ start_validation &lt;- Sys.time()
 
 # Load validation dataset
 # For testing purposes we are only going to read in a subset of the data
-sr_hex_data &lt;- read_csv(&quot;data/sr_hex.csv&quot;,n_max = 1000,skip = 0, col_types = cols());</code></pre>
+sr_hex_data &lt;- read_csv(&quot;data/sr_hex.csv&quot;,n_max = num_lines,skip = 0, col_types = cols());</code></pre>
 <pre><code>## Warning: Missing column names filled in: &#39;X1&#39; [1]</code></pre>
 <pre class="r"><code># Compare indexes to make sure they are the same (assume in same order for now)
 h3_indexes_true &lt;- sr_hex_data$h3_level8_index
@@ -283,16 +517,15 @@ if(validation_result) {
 <pre class="r"><code>end_validation &lt;- Sys.time()
 validation_time &lt;- difftime(end_validation, start_validation)
 print(paste(&quot;validation_time =&quot;,validation_time))</code></pre>
-<pre><code>## [1] &quot;validation_time = 0.0434083938598633&quot;</code></pre>
+<pre><code>## [1] &quot;validation_time = 0.0398318767547607&quot;</code></pre>
 <pre class="r"><code>total_time &lt;- difftime(end_validation, start)
 print(paste(&quot;total_time =&quot;,total_time))</code></pre>
-<pre><code>## [1] &quot;total_time = 6.56392312049866&quot;</code></pre>
+<pre><code>## [1] &quot;total_time = 10.6326193809509&quot;</code></pre>
 </div>
 <div id="performance" class="section level3">
 <h3>Performance</h3>
 <p>The time taken to perform these operations was logged to the command line and is presented in the table below.</p>
 <pre class="r"><code># Table showing the logged times for each subsection and the total
-options(digits=3)
 log_times &lt;- c(download_time,load_time,calc_h3_time,
                join_data_time,validation_time,total_time)
 log_times_df &lt;- data.frame(Times = log_times)
@@ -311,34 +544,35 @@ kable(log_times_df, caption = &quot;Log times for Initial Data Transformation Ta
 <tbody>
 <tr class="odd">
 <td align="left">Download</td>
-<td align="left">0.002 secs</td>
+<td align="left">0.006545544 secs</td>
 </tr>
 <tr class="even">
 <td align="left">Load</td>
-<td align="left">0.995 secs</td>
+<td align="left">0.757933617 secs</td>
 </tr>
 <tr class="odd">
 <td align="left">Calc H3 Index</td>
-<td align="left">5.465 secs</td>
+<td align="left">9.749094725 secs</td>
 </tr>
 <tr class="even">
 <td align="left">Join Data</td>
-<td align="left">0.011 secs</td>
+<td align="left">0.012549639 secs</td>
 </tr>
 <tr class="odd">
 <td align="left">Validation</td>
-<td align="left">0.043 secs</td>
+<td align="left">0.039831877 secs</td>
 </tr>
 <tr class="even">
 <td align="left">Total</td>
-<td align="left">6.564 secs</td>
+<td align="left">10.632619381 secs</td>
 </tr>
 </tbody>
 </table>
 </div>
 <div id="conclusions" class="section level3">
 <h3>Conclusions</h3>
-<p>We have now successfully joined the service request dataset and the H3 level 8 dataset. The joined dataset was validated using a provided dataset and comparing H3 level 8 indexes.</p>
+<p>We have now successfully joined the service request dataset and the H3 level 8 dataset. The number of failed joins is output to the user at the end. If the location data is not valid for a percentage of the data read so far then the program exits. From minimal testing, the parallelisation seems to speed up the program.</p>
+<p>The joined dataset was validated using a provided dataset and comparing H3 level 8 indexes.</p>
 </div>
 </div>
 
