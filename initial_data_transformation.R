@@ -42,6 +42,7 @@ if(!file.exists(hex_8_data_filename)) {
 
 sr_data_filename <- "data/sr.csv"
 sr_gz_data_filename <- "data/sr.csv.gz"
+options(timeout=180)
 if(!file.exists(sr_data_filename)) {
   sr_data_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr.csv.gz"
   download.file(sr_data_url, sr_gz_data_filename)
@@ -156,7 +157,16 @@ print(paste("join_data_time =",join_data_time))
 
 start_validation <- Sys.time()
 # Download validation data if not present
-# TODO
+
+sr_hex_data_filename <- "data/sr_hex.csv"
+sr_hex_gz_data_filename <- "data/sr_hex.csv.gz"
+options(timeout=180)
+if(!file.exists(sr_hex_data_filename)) {
+  sr_hex_data_url <- "https://cct-ds-code-challenge-input-data.s3.af-south-1.amazonaws.com/sr_hex.csv.gz"
+  download.file(sr_hex_data_url, sr_hex_gz_data_filename)
+  gunzip(sr_hex_gz_data_filename, remove=FALSE)
+}
+
 
 # Load validation dataset
 # For testing purposes we are only going to read in a subset of the data

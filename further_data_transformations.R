@@ -1,12 +1,8 @@
 # Import libraries
 library(tidyverse)
 library(jsonlite)
-library(logging)
 
 rm(list = ls())
-basicConfig()
-addHandler(writeToFile, file="further_data_transformations.log", level='DEBUG')
-loginfo("Running further_data_transformations.R",1)
 
 # LOAD DATA ==========================================================
 
@@ -25,8 +21,7 @@ if(!file.exists(sr_data_filename)) {
 
 end_download <- Sys.time()
 download_time <- difftime(end_download, start)
-#print(paste("download_time =",download_time))
-loginfo(paste("download_time =",download_time),1)
+print(paste("download_time =",download_time))
 
 start_load <- Sys.time()
 

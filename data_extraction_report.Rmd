@@ -55,7 +55,8 @@ secrets <- fromJSON(aws_credentials_url)
 Sys.setenv(
   "AWS_ACCESS_KEY_ID" = secrets$s3$access_key,
   "AWS_SECRET_ACCESS_KEY" = secrets$s3$secret_key,
-  "AWS_DEFAULT_REGION" = "af-south-1"
+  "AWS_DEFAULT_REGION" = "af-south-1",
+  "AWS_REGION" = "af-south-1"
 )
 
 # Setup connection to AWS S3

@@ -61,11 +61,6 @@ extraction_time <- difftime(end_extraction, start)
 print(paste("extraction_time =",extraction_time))
 
 
-result <- s3$put_object(
-  Body = "data/sr_hex_anon.csv",
-  Bucket = "cct-ds-code-challenge-input-data",
-  Key = "sr_hex_sub_james_mbewu.csv"
-)
 
 
 # VALIDATION =================
